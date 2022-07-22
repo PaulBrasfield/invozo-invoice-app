@@ -5,6 +5,7 @@
     class="invoice-wrap flex flex-column"
   >
     <form @submit.prevent="submitForm" class="invoice-content">
+      <Loading v-show="loading" />
       <h1>New Invoice</h1>
 
       <!-- Bill From-->
@@ -57,7 +58,7 @@
         </div>
         <div class="input flex flex-column">
           <label for="clientEmail">Client Email</label>
-          <input required type="text" id="clientName" v-model="clientName" />
+          <input required type="text" id="clientName" v-model="clientEmail" />
         </div>
         <div class="input flex flex-column">
           <label for="clientStreetAddress">Street Address</label>
@@ -121,9 +122,10 @@
         </div>
         <div class="input flex flex-column">
           <label for="paymentTerms">Payment Terms</label>
-          <select required type="text" id="invoiceDate" v-model="invoiceDate">
+          <select required type="text" id="paymentTerms" v-model="paymentTerms">
             <option value="30">Net 30 Days</option>
             <option value="60">Net 60 Days</option>
+            <option value="90">Net 90 Days</option>
           </select>
         </div>
         <div class="input flex flex-column">
@@ -139,11 +141,11 @@
         <div class="input flex flex-column">
           <label for="invoiceNumber">PO Number</label>
           <input
-            required
+            disabled
             type="text"
             id="invoiceNumber"
             size="50"
-            maxLength="9"
+            maxLength="10"
             v-model="invoiceNumber"
           />
         </div>
@@ -178,12 +180,8 @@
             </tr>
           </table>
 
-          <div class="flex button">
-            <img
-              @click="addNewInvoiceItem"
-              src="@/assets/icon-plus.svg"
-              alt="Add Invoice"
-            />
+          <div @click="addNewInvoiceItem" class="flex button">
+            <img src="@/assets/icon-plus.svg" alt="Add Invoice" />
             Add New Item
           </div>
         </div>
@@ -203,6 +201,10 @@
   </div>
 </template>
 <script>
+import { mapMutations } from "vuex";
+import { uid } from "uid";
+import db from "../firebase/firebaseInit";
+import Loading from "../components/Loading";
 export default {
   name: "InvoiceModal",
   data() {
@@ -219,7 +221,7 @@ export default {
       clientCountry: null,
       invoiceDateUnix: null,
       invoiceDate: null,
-      invoiceNumber: null,
+      invoiceNumber: "5025",
       paymentTerms: null,
       paymentDueDateUnix: null,
       paymentDueDate: null,
@@ -228,7 +230,134 @@ export default {
       invoiceDraft: null,
       invoiceItemList: [],
       invoiceTotal: 0,
+      dateOptions: { year: "numeric", month: "short", day: "numeric" },
+      loading: null,
     };
+  },
+  components: {
+    Loading,
+  },
+  created() {
+    // Get current date for invoice date field
+    this.invoiceDateUnix = Date.now();
+    this.invoiceDate = new Date(this.invoiceDateUnix).toLocaleDateString(
+      "en-us",
+      this.dateOptions
+    );
+  },
+  methods: {
+    ...mapMutations(["TOGGLE_INVOICE"]),
+
+    closeInvoice() {
+      this.TOGGLE_INVOICE();
+    },
+
+    addNewInvoiceItem() {
+      console.log("Test");
+      this.invoiceItemList.push({
+        id: uid(),
+        itemName: "",
+        qty: "",
+        price: 0,
+        total: 0,
+      });
+    },
+
+    deleteInvoiceItem(id) {
+      this.invoiceItemList = this.invoiceItemList.filter(
+        (item) => item.id !== id
+      );
+    },
+
+    calculateInvoiceTotal() {
+      this.invoiceTotal = 0;
+      this.invoiceItemList.forEach((item) => {
+        this.invoiceTotal += item.total;
+      });
+    },
+
+    publishInvoice() {
+      this.invoicePending = true;
+    },
+
+    saveDraft() {
+      this.invoiceDraft = true;
+    },
+
+    async uploadInvoice() {
+      if (this.invoiceItemList.length <= 0) {
+        alert("Please ensure you have filled out all work items.");
+        return;
+      }
+
+      this.loading = true;
+
+      this.calculateInvoiceTotal();
+
+      const dataBase = db.collection("invoices").doc();
+
+      await dataBase.set({
+        invoiceNumber: this.invoiceNumber,
+        billerStreetAddress: this.billerStreetAddress,
+        billerCity: this.billerCity,
+        billerZipCode: this.billerZipCode,
+        billerCountry: this.billerCountry,
+        clientName: this.clientName,
+        clientEmail: this.clientEmail,
+        clientStreetAddress: this.clientStreetAddress,
+        clientCity: this.clientCity,
+        clientZipCode: this.clientZipCode,
+        clientCountry: this.clientCountry,
+        invoiceDate: this.invoiceDate,
+        invoiceDateUnix: this.invoiceDateUnix,
+        paymentTerms: this.paymentTerms,
+        paymentDueDate: this.paymentDueDate,
+        paymentDueDateUnix: this.paymentDueDateUnix,
+        productDescription: this.productDescription,
+        invoiceItemList: this.invoiceItemList,
+        invoiceTotal: this.invoiceTotal,
+        invoicePending: this.invoicePending,
+        invoiceDraft: this.invoiceDraft,
+        invoicePaid: null,
+      });
+
+      this.loading = false;
+
+      this.TOGGLE_INVOICE();
+    },
+
+    submitForm() {
+      this.uploadInvoice();
+    },
+  },
+  watch: {
+    paymentTerms() {
+      const futureDate = new Date();
+      this.paymentDueDateUnix = futureDate.setDate(
+        futureDate.getDate() + parseInt(this.paymentTerms)
+      );
+      this.paymentDueDate = new Date(
+        this.paymentDueDateUnix
+      ).toLocaleDateString("en-us", this.dateOptions);
+    },
+  },
+  mounted() {
+    //Generate PO Number
+    this.invoiceNumber = "";
+    var characters = "1234567890";
+    var invoiceHeader = "5025";
+    var charactersLength = characters.length;
+    var length = 6;
+
+    for (var i = 0; i < length; i++) {
+      this.invoiceNumber += characters.charAt(
+        Math.floor(Math.random() * charactersLength)
+      );
+    }
+
+    this.invoiceNumber = invoiceHeader + this.invoiceNumber;
+
+    return this.invoiceNumber;
   },
 };
 </script>
@@ -241,8 +370,15 @@ export default {
   width: 100%;
   height: 100vh;
   overflow: scroll;
+  -ms-overflow-style: none; /* Hide scrollbar for IE and Edge */
+  scrollbar-width: none; /* Hide scrollbar for Firefox */
   @media (min-width: 900px) {
     left: 90px;
+  }
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .invoice-wrap::-webkit-scrollbar {
+    display: none;
   }
 
   .invoice-content {
