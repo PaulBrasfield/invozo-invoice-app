@@ -166,10 +166,14 @@
               <td class="item-name">
                 <input type="text" v-model="item.itemName" />
               </td>
-              <td class="qty"><input type="text" v-model="item.qty" /></td>
-              <td class="price"><input type="text" v-model="item.price" /></td>
+              <td class="qty">
+                <input type="text" maxLength="3" v-model="item.qty" />
+              </td>
+              <td class="price">
+                <input type="text" maxLength="9" v-model="item.price" />
+              </td>
               <td class="total flex">
-                ${{ (item.total = item.qty * item.price) }}
+                ${{ (item.total = (item.qty * item.price).toFixed(2)) }}
               </td>
               <img
                 @click="deleteInvoiceItem(item.id)"
@@ -295,7 +299,7 @@ export default {
   methods: {
     ...mapMutations(["TOGGLE_INVOICE", "TOGGLE_MODAL", "TOGGLE_EDIT_INVOICE"]),
 
-    ...mapActions(["UPDATE_INVOICE"]),
+    ...mapActions(["UPDATE_INVOICE", "GET_INVOICES"]),
 
     checkClick(e) {
       if (e.target === this.$refs.invoiceWrap) {
@@ -383,6 +387,8 @@ export default {
       this.loading = false;
 
       this.TOGGLE_INVOICE();
+
+      this.GET_INVOICES();
     },
 
     async updateInvoice() {
